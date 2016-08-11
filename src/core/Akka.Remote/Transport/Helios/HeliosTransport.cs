@@ -96,6 +96,7 @@ namespace Akka.Remote.Transport.Helios
             var configHost = Config.GetString("hostname");
             var publicConfigHost = Config.GetString("public-hostname");
             DnsUseIpv6 = Config.GetBoolean("dns-use-ipv6");
+            EnforceAddressFamily = Config.GetBoolean("enforce-ip-env");
             Hostname = string.IsNullOrEmpty(configHost) ? IPAddress.Any.ToString() : configHost;
             PublicHostname = string.IsNullOrEmpty(publicConfigHost) ? Hostname : publicConfigHost;
             ServerSocketWorkerPoolSize = ComputeWps(Config.GetConfig("server-socket-worker-pool"));
@@ -133,6 +134,8 @@ namespace Akka.Remote.Transport.Helios
         public bool TcpReuseAddr { get; private set; }
 
         public bool DnsUseIpv6 { get; private set; }
+
+        public bool EnforceAddressFamily { get; private set; }
 
         /// <summary>
         /// The hostname that this server binds to
@@ -293,7 +296,9 @@ namespace Akka.Remote.Transport.Helios
                     .Option(ChannelOption.ConnectTimeout, Settings.ConnectTimeout)
                     .Option(ChannelOption.AutoRead, false)
                     .PreferredDnsResolutionFamily(addressFamily)
-                    .ChannelFactory(() => new TcpSocketChannel(addressFamily))
+                    .ChannelFactory(() => Settings.EnforceAddressFamily ? 
+                                        new TcpSocketChannel(addressFamily):
+                                        new TcpSocketChannel())
                     .Handler(
                         new ActionChannelInitializer<TcpSocketChannel>(
                             channel => SetClientPipeline(channel, remoteAddres)));
@@ -333,7 +338,9 @@ namespace Akka.Remote.Transport.Helios
                      .ChildOption(ChannelOption.AutoRead, false)
                      .Option(ChannelOption.SoBacklog, Settings.Backlog)
                      .PreferredDnsResolutionFamily(addressFamily)
-                     .ChannelFactory(() => new TcpServerSocketChannel(addressFamily))
+                     .ChannelFactory(() => Settings.EnforceAddressFamily ? 
+                                            new TcpServerSocketChannel(addressFamily):
+                                            new TcpServerSocketChannel())
                      .ChildHandler(
                          new ActionChannelInitializer<TcpSocketChannel>(
                              SetServerPipeline));
