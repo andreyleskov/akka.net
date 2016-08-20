@@ -57,6 +57,7 @@ namespace Akka.Remote.Transport.Helios
     internal class HeliosTransportSettings
     {
         internal readonly Config Config;
+        private static readonly bool IsMono = Type.GetType("Mono.Runtime") != null;
 
         public HeliosTransportSettings(Config config)
         {
@@ -96,7 +97,7 @@ namespace Akka.Remote.Transport.Helios
             var configHost = Config.GetString("hostname");
             var publicConfigHost = Config.GetString("public-hostname");
             DnsUseIpv6 = Config.GetBoolean("dns-use-ipv6");
-            EnforceAddressFamily = Config.GetBoolean("enforce-ip-env");
+            EnforceIpFamily = Config.HasPath("enforce-ip-family") ? Config.GetBoolean("enforce-ip-family") : IsMono;
             Hostname = string.IsNullOrEmpty(configHost) ? IPAddress.Any.ToString() : configHost;
             PublicHostname = string.IsNullOrEmpty(publicConfigHost) ? Hostname : publicConfigHost;
             ServerSocketWorkerPoolSize = ComputeWps(Config.GetConfig("server-socket-worker-pool"));
@@ -135,7 +136,7 @@ namespace Akka.Remote.Transport.Helios
 
         public bool DnsUseIpv6 { get; private set; }
 
-        public bool EnforceAddressFamily { get; private set; }
+        public bool EnforceIpFamily { get; private set; }
 
         /// <summary>
         /// The hostname that this server binds to
@@ -296,7 +297,7 @@ namespace Akka.Remote.Transport.Helios
                     .Option(ChannelOption.ConnectTimeout, Settings.ConnectTimeout)
                     .Option(ChannelOption.AutoRead, false)
                     .PreferredDnsResolutionFamily(addressFamily)
-                    .ChannelFactory(() => Settings.EnforceAddressFamily ? 
+                    .ChannelFactory(() => Settings.EnforceIpFamily ? 
                                         new TcpSocketChannel(addressFamily):
                                         new TcpSocketChannel())
                     .Handler(
@@ -338,7 +339,7 @@ namespace Akka.Remote.Transport.Helios
                      .ChildOption(ChannelOption.AutoRead, false)
                      .Option(ChannelOption.SoBacklog, Settings.Backlog)
                      .PreferredDnsResolutionFamily(addressFamily)
-                     .ChannelFactory(() => Settings.EnforceAddressFamily ? 
+                     .ChannelFactory(() => Settings.EnforceIpFamily ? 
                                             new TcpServerSocketChannel(addressFamily):
                                             new TcpServerSocketChannel())
                      .ChildHandler(
