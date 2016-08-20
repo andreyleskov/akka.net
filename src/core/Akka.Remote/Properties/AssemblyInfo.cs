@@ -34,6 +34,3 @@ using System.Runtime.InteropServices;
 [assembly: InternalsVisibleTo("Akka.Cluster")]
 [assembly: InternalsVisibleTo("Akka.Cluster.Tests")]
 [assembly: InternalsVisibleTo("Akka.Cluster.TestKit")]
-
-[assembly: AssemblyVersion("1.1.5")]
-[assembly: AssemblyFileVersion("1.1.5")]
