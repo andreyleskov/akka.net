@@ -98,7 +98,6 @@ namespace Akka.Remote.Tests
             Assert.Equal(2, s.ClientSocketWorkerPoolSize);
             Assert.False(s.BackwardsCompatibilityModeEnabled);
             Assert.False(s.DnsUseIpv6);
-            Assert.False(s.EnforceIpFamily);
         }
 
         [Fact]
