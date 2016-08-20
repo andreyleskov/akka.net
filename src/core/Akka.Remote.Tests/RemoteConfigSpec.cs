@@ -98,7 +98,29 @@ namespace Akka.Remote.Tests
             Assert.Equal(2, s.ClientSocketWorkerPoolSize);
             Assert.False(s.BackwardsCompatibilityModeEnabled);
             Assert.False(s.DnsUseIpv6);
+            Assert.False(s.EnforceIpFamily);
         }
+
+        [Fact]
+        public void When_remoting_works_in_Mono_ip_enforcement_should_be_defaulted_to_true()
+        {
+            HeliosTransportSettings.IsMono = true;
+            var c = ((RemoteActorRefProvider)((ActorSystemImpl)Sys).Provider).RemoteSettings.Config.GetConfig("akka.remote.helios.tcp");
+            var s = new HeliosTransportSettings(c);
+            
+            Assert.True(s.EnforceIpFamily);
+        }
+
+        [Fact]
+        public void When_remoting_works_not_in_Mono_ip_enforcement_should_be_defaulted_to_false()
+        {
+            HeliosTransportSettings.IsMono = false;
+            var c = ((RemoteActorRefProvider)((ActorSystemImpl)Sys).Provider).RemoteSettings.Config.GetConfig("akka.remote.helios.tcp");
+            var s = new HeliosTransportSettings(c);
+
+            Assert.False(s.EnforceIpFamily);
+        }
+
 
         [Fact]
         public void Remoting_should_contain_correct_socket_worker_pool_configuration_values_in_ReferenceConf()
