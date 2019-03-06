@@ -25,7 +25,6 @@ using Akka.MultiNodeTestRunner.Shared.Sinks;
 using Akka.Remote.TestKit;
 using JetBrains.TeamCity.ServiceMessages.Write.Special;
 using JetBrains.TeamCity.ServiceMessages.Write.Special.Impl;
-using Microsoft.DotNet.PlatformAbstractions;
 using Xunit;
 #if CORECLR
 using System.Runtime.Loader;
@@ -371,7 +370,7 @@ namespace Akka.MultiNodeTestRunner
             //Return the proper exit code
             Environment.Exit(ExitCodeContainer.ExitCode);
         }
-
+#if CORECLR
         private static Assembly LoadAssembly(string assemblyFullPath, bool printLog)
         {
             Assembly assembly = null;
@@ -433,7 +432,7 @@ namespace Akka.MultiNodeTestRunner
                 LoadAssemblyReferences(path, loadedAssemblies, printLog);
             }
         }
-
+#endif
         static string ChangeDllPathPlatform(string path, string targetPlatform)
         {
             return Path.GetFullPath(Path.Combine(Path.GetDirectoryName(path), "..", targetPlatform, Path.GetFileName(path)));

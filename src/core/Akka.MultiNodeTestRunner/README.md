@@ -26,9 +26,25 @@ The `Akka.MultiNodeTestRunner` process requires only one argument - the full pat
 
 If your test assembly has any dependent DLLs, make sure all of those assemblies can be found in the current working directory of the test runner. Otherwise you might get `Could not load file or assembly` exceptions at run time.
 
-## Sample Output
+### Running on .Net Core 
 
-*Working on cleaning this up now*
+MultiNodeTestRunner can be launched on .Net Core, but you need to manual build it from the source code. 
+During launch add parameter "-Dmultinode.platform=netcore".
+And launch it as   
+```
+    dotnet Akka.MultiNodeTestRunner.dll "MyTests.dll" -Dmultinode.platform=netcore
+```
+Or 
+```
+    ./Akka.MultiNodeTestRunner "MyTests.dll" -Dmultinode.platform=netcore
+```
+Depending on how did you publish the project - as framework-dependent or standalone application
+Remember to publish and copy binaries from Akka.NodeTestRunner to working directory of Akka.MultiNodeTestRunner, 
+as it is used underneath. 
+
+### Debugging MultinodeTestRunner
+
+If you struggle with error, it could be useful to add "-Dmultinode.trace=true" to see some additional debug information. 
 
 
 
