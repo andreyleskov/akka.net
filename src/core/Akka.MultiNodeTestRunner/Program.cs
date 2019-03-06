@@ -25,6 +25,7 @@ using Akka.MultiNodeTestRunner.Shared.Sinks;
 using Akka.Remote.TestKit;
 using JetBrains.TeamCity.ServiceMessages.Write.Special;
 using JetBrains.TeamCity.ServiceMessages.Write.Special.Impl;
+using Microsoft.DotNet.PlatformAbstractions;
 using Xunit;
 #if CORECLR
 using System.Runtime.Loader;
@@ -131,7 +132,27 @@ namespace Akka.MultiNodeTestRunner
             var listenPort = CommandLine.GetInt32OrDefault("multinode.listen-port", 6577);
             var listenEndpoint = new IPEndPoint(listenAddress, listenPort);
             var specName = CommandLine.GetPropertyOrDefault("multinode.spec", "");
-            var platform = CommandLine.GetPropertyOrDefault("multinode.platform", "net");
+            
+            
+            var platform = CommandLine.GetPropertyOrDefault("multinode.platform",
+#if CORECLR               
+                "netcore"
+#else 
+               "net"
+#endif
+            );
+            
+            var printAssemblyLoadLog = CommandLine.GetPropertyOrDefault("multinode.assembly-log", "false") == "true";
+            var printProcessLog = CommandLine.GetPropertyOrDefault("multinode.process-log", "false") == "true";
+            var printDiscoveryLog = CommandLine.GetPropertyOrDefault("multinode.discovery-log", "false") == "true";
+            var trace = CommandLine.GetPropertyOrDefault("multinode.trace", "false") == "true";
+            if (trace)
+            {
+                printAssemblyLoadLog = true;
+                printProcessLog = true;
+                printDiscoveryLog = true;
+            }
+            
 
 #if CORECLR
             if (!_validNetCorePlatform.Contains(platform))
@@ -155,33 +176,17 @@ namespace Akka.MultiNodeTestRunner
 #if CORECLR
             // In NetCore, if the assembly file hasn't been touched, 
             // XunitFrontController would fail loading external assemblies and its dependencies.
-            var assembly = AssemblyLoadContext.Default.LoadFromAssemblyPath(assemblyPath);
-            var asms = assembly.GetReferencedAssemblies();
-            var basePath = Path.GetDirectoryName(assemblyPath);
-            foreach (var asm in asms)
-            {
-                try
-                {
-                    Assembly.Load(new AssemblyName(asm.FullName));
-                }
-                catch (Exception)
-                {
-                    var path = Path.Combine(basePath, asm.Name + ".dll");
-                    try
-                    {
-                        AssemblyLoadContext.Default.LoadFromAssemblyPath(path);
-                    }
-                    catch (Exception e)
-                    {
-                        Console.Out.WriteLine($"Failed to load dll: {path}");
-                    }
-                }
-            }
+            var loadedAssemblies = Assembly.GetEntryAssembly()
+                                           .GetReferencedAssemblies()
+                                           .Select(a => a.Name)
+                                           .ToList();
+            
+            LoadAssemblyReferences(assemblyPath, loadedAssemblies, printAssemblyLoadLog);
 #endif
 
             using (var controller = new XunitFrontController(AppDomainSupport.IfAvailable, assemblyPath))
             {
-                using (var discovery = new Discovery())
+                using (var discovery = new Discovery(printDiscoveryLog))
                 {
                     controller.Find(false, discovery, TestFrameworkOptions.ForDiscovery());
                     discovery.Finished.WaitOne();
@@ -283,6 +288,14 @@ namespace Akka.MultiNodeTestRunner
                             }
 #endif
 
+                            if (printProcessLog)
+                            {
+                                Console.Out.WriteLine("Starting node as separate process");
+                                Console.Out.WriteLine($"Process fileName: { process.StartInfo.FileName }");
+                                Console.Out.WriteLine($"Process arguments: {process.StartInfo.Arguments }");
+                                Console.Out.WriteLine($"Process working directory: {process.StartInfo.Arguments }");
+                            }
+                                
                                 //TODO: might need to do some validation here to avoid the 260 character max path error on Windows
                                 var folder = Directory.CreateDirectory(Path.Combine(OutputDirectory, nodeTest.TestName));
                                 var logFilePath = Path.Combine(folder.FullName, $"node{nodeIndex}__{nodeRole}__{platform}.txt");
@@ -357,6 +370,68 @@ namespace Akka.MultiNodeTestRunner
 
             //Return the proper exit code
             Environment.Exit(ExitCodeContainer.ExitCode);
+        }
+
+        private static Assembly LoadAssembly(string assemblyFullPath, bool printLog)
+        {
+            Assembly assembly = null;
+            try
+            {
+                //try to find assembly on disk, shipped as part of multinode test program
+                assembly = Assembly.Load(new AssemblyName(assemblyFullPath));
+                
+                if (printLog)
+                    Console.Out.WriteLine($"Loaded assembly {assemblyFullPath}");
+            }
+            catch (Exception)
+            {
+                try
+                {
+                    //try to find assembly on disk, shipped as part of multinode test program
+                    assembly = AssemblyLoadContext.Default.LoadFromAssemblyPath(assemblyFullPath);
+                    
+                    if (printLog)
+                        Console.Out.WriteLine($"Loaded assembly {assemblyFullPath}");
+                }
+                catch (Exception e)
+                {
+                    try
+                    {
+                        //system assembly that are not presented on disk
+                        var name = Path.GetFileNameWithoutExtension(assemblyFullPath);
+                        assembly = Assembly.Load(new AssemblyName(name));
+                    }
+                    catch
+                    {
+                        Console.Out.WriteLine($"Failed to load assembly: {assemblyFullPath}");
+                        return null;
+                    }
+                }
+            }
+            
+            return assembly;
+        }
+        
+        private static void LoadAssemblyReferences(string assemblyFullPath, List<string> loadedAssemblies, bool printLog)
+        {
+            var assembly = LoadAssembly(assemblyFullPath, printLog);
+
+            if (assembly == null)
+            {
+                loadedAssemblies.Add(Path.GetFileNameWithoutExtension(assemblyFullPath));
+                return;
+            }
+            
+            loadedAssemblies.Add(assembly.GetName().Name);
+
+            var basePath = Path.GetDirectoryName(assemblyFullPath);
+
+            foreach (var asm in assembly.GetReferencedAssemblies()
+                                        .Where(a => !loadedAssemblies.Contains(a.Name)))
+            {
+                var path = Path.Combine(basePath, asm.Name + ".dll");
+                LoadAssemblyReferences(path, loadedAssemblies, printLog);
+            }
         }
 
         static string ChangeDllPathPlatform(string path, string targetPlatform)

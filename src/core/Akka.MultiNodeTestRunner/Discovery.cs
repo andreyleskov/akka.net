@@ -25,6 +25,7 @@ namespace Akka.MultiNodeTestRunner
     public class Discovery : MarshalByRefObject, IMessageSink, IDisposable
 #endif
     {
+        private readonly bool _printDiscoveryLog;
         public Dictionary<string, List<NodeTest>> Tests { get; set; }
         public List<ErrorMessage> Errors { get; } = new List<ErrorMessage>();
         public bool WasSuccessful => Errors.Count == 0;
@@ -32,8 +33,9 @@ namespace Akka.MultiNodeTestRunner
         /// <summary>
         /// Initializes a new instance of the <see cref="Discovery"/> class.
         /// </summary>
-        public Discovery()
+        public Discovery(bool printDiscoveryLog = false)
         {
+            _printDiscoveryLog = printDiscoveryLog;
             Tests = new Dictionary<string, List<NodeTest>>();
             Finished = new ManualResetEvent(false);
         }
@@ -43,19 +45,34 @@ namespace Akka.MultiNodeTestRunner
 
         public virtual bool OnMessage(IMessageSinkMessage message)
         {
+            
+            if(_printDiscoveryLog)
+                 Console.WriteLine($"Got message {message.GetType()} during test discover");
+            
             switch (message)
             {
                 case ITestCaseDiscoveryMessage testCaseDiscoveryMessage:
                     var testClass = testCaseDiscoveryMessage.TestClass.Class;
+                    
+                    if(_printDiscoveryLog)
+                        Console.Out.WriteLine($"Loading type for {testClass.Name} during test discover");
+                    
                     if (testClass.IsAbstract) return true;
 #if CORECLR
+                    
                     var specType = testCaseDiscoveryMessage.TestAssembly.Assembly.GetType(testClass.Name).ToRuntimeType();
 #else
                     var testAssembly = Assembly.LoadFrom(testCaseDiscoveryMessage.TestAssembly.Assembly.AssemblyPath);
                     var specType = testAssembly.GetType(testClass.Name);
 #endif
+                    if(_printDiscoveryLog)
+                        Console.WriteLine($"Loaded {specType.Name} during test discover");
+
                     var roles = RoleNames(specType);
 
+                    if(_printDiscoveryLog)
+                        Console.WriteLine($"Got roles for {specType.Name} ");
+                    
                     var details = roles.Select((r, i) => new NodeTest
                     {
                         Node = i + 1,
@@ -87,9 +104,16 @@ namespace Akka.MultiNodeTestRunner
 
         private IEnumerable<RoleName> RoleNames(Type specType)
         {
+            if(_printDiscoveryLog)
+                Console.Out.WriteLine("starting role extraction");
+            
             var ctorWithConfig = FindConfigConstructor(specType);
             var configType = ctorWithConfig.GetParameters().First().ParameterType;
             var args = ConfigConstructorParamValues(configType);
+            
+            if(_printDiscoveryLog)
+                Console.WriteLine($"Creating {configType}");
+            
             var configInstance = Activator.CreateInstance(configType, args);
             var roleType = typeof(RoleName);
             var configProps = configType.GetProperties(BindingFlags.Instance | BindingFlags.Public);
